@@ -1,0 +1,18 @@
+{
+  "id": "black_pink_luxury",
+  "palette": [
+    "black",
+    "neon pink",
+    "deep magenta",
+    "chrome silver",
+    "luxury gold"
+  ],
+  "textures": [
+    "glossy reflections",
+    "soft bloom",
+    "flash photography",
+    "premium magazine grain"
+  ],
+  "composition": "clean luxury with visible menace",
+  "mood": "seductive, expensive, emotionally hollow"
+}

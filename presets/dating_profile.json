@@ -1,0 +1,18 @@
+{
+  "id": "dating_profile",
+  "archetype_pool": ["broccoli_intern", "jackside", "cookr", "scamsem"],
+  "format": "dating_profile",
+  "theme": "fake_community",
+  "style": "schizo_psyop",
+  "camera": "static_webcam",
+  "symbols": ["glowing_phone", "notification_burst", "private_group_chat"],
+  "slogan_pool": ["FRIENDSHIP IS DISTRIBUTION", "COMMUNITY IS A FUNNEL", "MATCHED WITH EXIT LIQUIDITY"],
+  "chaos_level": 7,
+  "prompt_prefix": "Turn the subject into a fake $GRINDR dating profile parody where crypto networking behaves like a dating app for wallet extraction.",
+  "prompt_constraints": [
+    "Include fake profile UI, follower count, wallet-size innuendo, and emotionally manipulative crypto bio language.",
+    "The satire should be theatrical and absurd, not hateful.",
+    "Make the profile instantly screenshot-worthy."
+  ],
+  "negative_prompt": ["real dating app branding", "explicit sexual content", "hateful caricature", "plain portrait", "generic social media mockup", "unreadable bio"]
+}

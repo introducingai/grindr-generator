@@ -1,0 +1,7 @@
+{
+  "id": "vhs_handheld",
+  "palette": ["black", "neon pink", "washed green", "dirty white"],
+  "textures": ["tracking lines", "analog grain", "compression noise", "timestamp burn-in"],
+  "composition": "leaked footage with readable meme text",
+  "mood": "unstable found-footage paranoia"
+}

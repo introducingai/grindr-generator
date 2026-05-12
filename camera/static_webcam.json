@@ -1,0 +1,10 @@
+{
+  "id": "static_webcam",
+  "description": "compressed static webcam livestream frame",
+  "motion": "locked but degraded",
+  "effects": [
+    "webcam compression",
+    "ring light glare",
+    "chat window crop"
+  ]
+}

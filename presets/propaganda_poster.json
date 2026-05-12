@@ -1,0 +1,18 @@
+{
+  "id": "propaganda_poster",
+  "archetype_pool": ["unc", "centr", "scamsem", "broccoli_intern"],
+  "format": "propaganda_poster",
+  "theme": "attention_harvesting",
+  "style": "corporate_dystopia",
+  "camera": "paparazzi_flash",
+  "symbols": ["glowing_phone", "notification_burst", "pink_mask_logo"],
+  "slogan_pool": ["WE EXTRACT", "YOUR FOLLOWERS ARE OUR ASSETS", "THE PRODUCT IS YOU"],
+  "chaos_level": 6,
+  "prompt_prefix": "Create an authoritarian $GRINDR INDUSTRIES propaganda poster about attention harvesting and memecoin extraction.",
+  "prompt_constraints": [
+    "Single strong central image, low text density, massive readable headline.",
+    "Use fictional corporate ministry aesthetics, black/pink neon, and uncomfortable sincerity.",
+    "The poster should be funny because it says the quiet part out loud."
+  ],
+  "negative_prompt": ["generic political poster", "real political symbols", "clean startup visual", "ordinary crypto marketing", "unreadable headline", "explicit sexual content"]
+}

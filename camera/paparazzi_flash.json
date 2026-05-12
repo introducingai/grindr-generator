@@ -1,0 +1,6 @@
+{
+  "id": "paparazzi_flash",
+  "description": "harsh paparazzi flash from a luxury exit-liquidity event",
+  "motion": "sudden and exposed",
+  "effects": ["overexposed flash", "motion smear", "chrome glare", "nightclub shadows"]
+}

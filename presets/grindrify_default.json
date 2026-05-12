@@ -1,0 +1,18 @@
+{
+  "id": "grindrify_default",
+  "archetype_pool": ["unc", "scamsem", "cookr", "orangr", "broccoli_intern"],
+  "format": "propaganda_poster",
+  "theme": "attention_harvesting",
+  "style": "black_pink_luxury",
+  "camera": "paparazzi_flash",
+  "symbols": ["glowing_phone", "notification_burst", "hidden_wallet_dashboard"],
+  "slogan_pool": ["WE EXTRACT", "ATTENTION IS LIQUIDITY", "THE PRODUCT IS YOU"],
+  "chaos_level": 7,
+  "prompt_prefix": "Transform the uploaded person/image into a $GRINDR INDUSTRIES propaganda meme from the hyper-memetic crypto satire universe.",
+  "prompt_constraints": [
+    "The joke must be clear immediately: attention is being harvested and someone is pretending this is community.",
+    "Use sharp poster typography, neon pink/black contrast, toxic green market signals, and a fictional corporate footer.",
+    "Make the image feel like a viral Crypto Twitter screenshot, not polished generic AI art."
+  ],
+  "negative_prompt": ["generic AI art", "wholesome crypto community", "startup SaaS branding", "boring finance ad", "real app trademark UI", "hate symbols", "explicit sexual content", "unreadable headline"]
+}

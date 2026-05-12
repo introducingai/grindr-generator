@@ -1,0 +1,18 @@
+{
+  "id": "internal_leak",
+  "archetype_pool": ["scamsem", "unc", "jackside", "orangr"],
+  "format": "internal_leak",
+  "theme": "hidden_wallets",
+  "style": "corporate_dystopia",
+  "camera": "surveillance_feed",
+  "symbols": ["private_group_chat", "hidden_wallet_dashboard", "pink_mask_logo"],
+  "slogan_pool": ["CONVICTION IN PUBLIC, EXIT IN PRIVATE", "THE WALLET NEVER LIES", "DEPLOY NARRATIVE"],
+  "chaos_level": 8,
+  "prompt_prefix": "Make a leaked internal $GRINDR memo/private chat screenshot that exposes the machinery of fake conviction and hidden wallet exits.",
+  "prompt_constraints": [
+    "Use redactions, timestamps, tactical notes, wallet fragments, and a forbidden-document composition.",
+    "It should feel like the viewer is seeing something they should not have access to.",
+    "The core gag should be a deadpan operational instruction for harvesting attention."
+  ],
+  "negative_prompt": ["real private messages", "real names", "plain spreadsheet", "clean white document", "unreadable redactions", "hate symbols", "explicit sexual content"]
+}

@@ -1,0 +1,6 @@
+{
+  "id": "surveillance_feed",
+  "description": "cropped surveillance camera feed from an internal extraction office",
+  "motion": "fixed and invasive",
+  "effects": ["timestamp overlay", "low-light noise", "redacted corners", "security monitor scanlines"]
+}

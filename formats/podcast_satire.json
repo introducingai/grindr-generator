@@ -1,0 +1,16 @@
+{
+  "id": "podcast_satire",
+  "description": "fake crypto podcast screenshot where the quiet part is said out loud",
+  "composition": "two speakers at microphones with market overlays and clipped livestream framing",
+  "text_density": "medium",
+  "required_elements": [
+    "guest lower third",
+    "absurd confession quote",
+    "live chat overlay"
+  ],
+  "best_for": [
+    "self-incrimination",
+    "KOL interviews",
+    "normalization of extraction"
+  ]
+}

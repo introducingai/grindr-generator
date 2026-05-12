@@ -1,0 +1,16 @@
+{
+  "id": "internal_leak",
+  "description": "leaked internal GRINDR INDUSTRIES memo or private group chat screenshot",
+  "composition": "cropped forbidden document view with redactions, timestamps, and tactical annotations",
+  "text_density": "high",
+  "required_elements": [
+    "confidential header",
+    "redacted names",
+    "wallet or narrative instructions"
+  ],
+  "best_for": [
+    "private chats",
+    "side-wallet discussions",
+    "narrative deployment"
+  ]
+}

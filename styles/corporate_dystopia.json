@@ -1,0 +1,17 @@
+{
+  "id": "corporate_dystopia",
+  "palette": [
+    "black",
+    "neon pink",
+    "warning red",
+    "cold white"
+  ],
+  "textures": [
+    "photocopied memo grit",
+    "surveillance noise",
+    "hard poster contrast",
+    "screen burn"
+  ],
+  "composition": "authoritarian poster clarity",
+  "mood": "cold corporate psyop"
+}

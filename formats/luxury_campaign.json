@@ -1,0 +1,16 @@
+{
+  "id": "luxury_campaign",
+  "description": "dark luxury fashion campaign parody for extraction culture",
+  "composition": "minimal high-status subject with a hard neon product-like focus",
+  "text_density": "low",
+  "required_elements": [
+    "luxury headline",
+    "premium object",
+    "cold brand footer"
+  ],
+  "best_for": [
+    "wealth emptiness",
+    "silent exits",
+    "status optimization"
+  ]
+}

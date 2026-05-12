@@ -1,0 +1,8 @@
+{
+  "id": "private_group_chat",
+  "description": "private group chat with tactical narrative instructions and redacted names",
+  "associated_themes": [
+    "narrative_deployment",
+    "attention_harvesting"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "luxury_campaign",
+  "archetype_pool": ["jackside", "unc", "centr", "scamsem"],
+  "format": "luxury_campaign",
+  "theme": "luxury_after_rug",
+  "style": "black_pink_luxury",
+  "camera": "luxury_editorial",
+  "symbols": ["hidden_wallet_dashboard", "pink_mask_logo", "green_candles"],
+  "slogan_pool": ["WE'RE THE HOUSE", "CONVICTION WAS A SERVICE", "EXIT IN SILENCE"],
+  "chaos_level": 5,
+  "prompt_prefix": "Create a dark luxury $GRINDR campaign ad where extraction culture is sold like a fashion house.",
+  "prompt_constraints": [
+    "Use expensive emptiness, chrome reflections, black fabric, neon pink accents, and one brutal corporate slogan.",
+    "The subject should look calm because the exit already happened.",
+    "Make it seductive and hollow, like a luxury ad that accidentally admits the business model."
+  ],
+  "negative_prompt": ["cheap streetwear ad", "bright happy lifestyle", "generic cyberpunk", "cluttered collage", "real brand logos", "explicit sexual content"]
+}

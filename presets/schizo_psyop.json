@@ -1,0 +1,18 @@
+{
+  "id": "schizo_psyop",
+  "archetype_pool": ["orangr", "cookr", "fagge_banks", "broccoli_intern"],
+  "format": "schizo_collage",
+  "theme": "narrative_deployment",
+  "style": "schizo_psyop",
+  "camera": "handheld_vhs",
+  "symbols": ["notification_burst", "private_group_chat", "green_candles", "pink_mask_logo"],
+  "slogan_pool": ["DEPLOY NARRATIVE", "TIMELINE SHIFTING", "ATTENTION IS LIQUIDITY"],
+  "chaos_level": 10,
+  "prompt_prefix": "Create a dense $GRINDR schizo psyop collage that looks like the timeline became self-aware and started farming its own holders.",
+  "prompt_constraints": [
+    "Layer charts, posts, chat fragments, phone alerts, operator notes, and corporate extraction slogans.",
+    "High chaos is allowed, but the main headline must remain readable.",
+    "The humor should feel paranoid, absurd, and too accurate."
+  ],
+  "negative_prompt": ["clean minimal poster", "generic meme template", "calm wholesome tone", "blank background", "illegible all-over text", "real platform logos", "hate symbols"]
+}

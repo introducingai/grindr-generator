@@ -1,0 +1,13 @@
+{
+  "id": "schizo_psyop",
+  "palette": [
+    "black",
+    "neon pink",
+    "toxic green"
+  ],
+  "textures": [
+    "glitch overlays",
+    "compression artifacts",
+    "chromatic aberration"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "fomo_engineering",
+  "archetype_pool": ["cookr", "scamsem", "orangr", "broccoli_intern"],
+  "format": "propaganda_poster",
+  "theme": "fomo_extraction",
+  "style": "corporate_dystopia",
+  "camera": "static_webcam",
+  "symbols": ["glowing_phone", "green_candles", "notification_burst", "hidden_wallet_dashboard"],
+  "slogan_pool": ["PING -> PUMP -> EXIT", "ATTENTION IS LIQUIDITY", "YOUR FOLLOWERS ARE OUR ASSETS"],
+  "chaos_level": 8,
+  "prompt_prefix": "Make a $GRINDR FOMO engineering poster where the subject becomes a professional attention farmer converting notifications into exit liquidity.",
+  "prompt_constraints": [
+    "Show a visible pipeline from trust to hype to entry to extraction.",
+    "Include fake corporate language and one deadpan confession in the design.",
+    "The result should feel like an internal training poster leaked from a memecoin extraction office."
+  ],
+  "negative_prompt": ["ordinary trading chart", "earnest investment advice", "clean fintech ad", "boring office scene", "unreadable text", "real person defamation", "explicit sexual content"]
+}

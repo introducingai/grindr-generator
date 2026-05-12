@@ -1,0 +1,9 @@
+{
+  "id": "handheld_vhs",
+  "description": "shaky VHS handheld footage",
+  "effects": [
+    "tracking lines",
+    "analog grain",
+    "fisheye distortion"
+  ]
+}
