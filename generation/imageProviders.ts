@@ -1,5 +1,6 @@
-import { fal } from "@fal-ai/client";
+import { ApiError, createFalClient, fal, type FalClient } from "@fal-ai/client";
 import type { CompiledPrompt, ImageGenerationOptions, ImageGenerationResult } from "./types";
+import { applyTextOverlay } from "./textOverlay";
 
 const DEFAULT_FAL_TIMEOUT_MS = 55_000;
 
@@ -53,12 +54,102 @@ function falFailureResult(compiled: CompiledPrompt, options: ImageGenerationOpti
     prompt: compiled.prompt,
     negativePrompt: compiled.negativePrompt,
     caption: compiled.caption,
+    overlayText: compiled.overlayText,
     rawProviderResponse: null,
     meta: {
       error: message,
       fallback: true
     }
   } satisfies ImageGenerationResult;
+}
+
+function shortPrompt(prompt: string) {
+  const core = prompt
+    .split(/\n{2,}/)
+    .filter((block) =>
+      /Transform|Create|User brief|Preset|Slogan|Style|Make it absurd|viral|Crypto Twitter/i.test(block)
+    )
+    .join("\n\n");
+
+  const compact = core || prompt;
+  return compact.length > 1800 ? `${compact.slice(0, 1800)}\n\nMake it readable, viral, satirical, neon pink/black.` : compact;
+}
+
+function retryCompiledPrompt(compiled: CompiledPrompt): CompiledPrompt {
+  return {
+    ...compiled,
+    prompt: shortPrompt(compiled.prompt)
+  };
+}
+
+async function readResponseText(response: Response) {
+  const clone = response.clone();
+  const contentType = response.headers.get("content-type") || "unknown";
+  let body = "";
+
+  try {
+    body = await clone.text();
+  } catch (error) {
+    body = error instanceof Error ? `Could not read response body: ${error.message}` : "Could not read response body.";
+  }
+
+  return {
+    status: response.status,
+    contentType,
+    body,
+    bodyPreview: body.slice(0, 1200)
+  };
+}
+
+async function falResponseHandler<Output>(response: Response): Promise<Output> {
+  const preview = await readResponseText(response);
+
+  if (!response.ok) {
+    console.error("[imageProviders:fAL] Fal returned non-OK response.", preview);
+    throw new Error(`Fal returned ${preview.status}: ${preview.bodyPreview || "empty response"}`);
+  }
+
+  if (!preview.contentType.includes("application/json")) {
+    console.error("[imageProviders:fAL] Fal returned non-JSON response.", preview);
+    throw new Error(`Fal returned non-JSON response (${preview.contentType}).`);
+  }
+
+  try {
+    return JSON.parse(preview.body) as Output;
+  } catch (error) {
+    console.error("[imageProviders:fAL] Fal returned malformed JSON response.", preview);
+    const message = error instanceof Error ? error.message : "Malformed provider JSON.";
+    throw new Error(`Fal returned malformed JSON: ${message}`);
+  }
+}
+
+function logFalError(error: unknown) {
+  const base = {
+    name: error instanceof Error ? error.name : "UnknownError",
+    message: error instanceof Error ? error.message : String(error),
+    cause: error instanceof Error && error.cause ? String(error.cause) : null
+  };
+
+  if (error instanceof ApiError) {
+    console.error("[imageProviders:fAL] Fal ApiError.", {
+      ...base,
+      status: error.status,
+      requestId: error.requestId,
+      bodyPreview: JSON.stringify(error.body).slice(0, 1200)
+    });
+    return;
+  }
+
+  console.error("[imageProviders:fAL] Fal unknown error.", base);
+}
+
+function assertFalImageResponse(response: { data?: { images?: Array<{ url?: string }> } }) {
+  if (!response?.data || !Array.isArray(response.data.images)) {
+    console.error("[imageProviders:fAL] Fal response missing data.images.", {
+      responsePreview: JSON.stringify(response).slice(0, 1200)
+    });
+    throw new Error("Fal returned a malformed response: missing data.images.");
+  }
 }
 
 const mockProvider: ImageProvider = {
@@ -73,8 +164,9 @@ const mockProvider: ImageProvider = {
       imageUrl: null,
       prompt: compiled.prompt,
       negativePrompt: compiled.negativePrompt,
-      caption: compiled.caption,
-      rawProviderResponse: null,
+    caption: compiled.caption,
+    overlayText: compiled.overlayText,
+    rawProviderResponse: null,
       meta: {
         note: "Mock provider active. Add FAL_KEY to .env.local and select Fal to generate real Flux images.",
         requestedMode: mode
@@ -103,6 +195,7 @@ const falProvider: ImageProvider = {
     }
 
     fal.config({ credentials: falKey });
+    const generationFal = createFalClient({ credentials: falKey, responseHandler: falResponseHandler });
 
     try {
       if (options?.sourceImage) {
@@ -111,40 +204,40 @@ const falProvider: ImageProvider = {
           imageType: options.sourceImage.type || "unknown"
         });
 
-        const sourceImageUrl = await withTimeout("Fal upload", () =>
-          fal.storage.upload(options.sourceImage as Blob, {
-            lifecycle: { expiresIn: "1d" }
-          })
-        );
+        let sourceImageUrl: string;
+        try {
+          sourceImageUrl = await withTimeout("Fal upload", () =>
+            fal.storage.upload(options.sourceImage as Blob, {
+              lifecycle: { expiresIn: "1d" }
+            })
+          );
+        } catch (error) {
+          console.error("[imageProviders:fAL] Fal storage upload failed.");
+          logFalError(error);
+          throw error;
+        }
 
         console.info("[imageProviders:fAL] Starting Flux Kontext generation.", {
           model: "fal-ai/flux-kontext/dev",
           promptLength: compiled.prompt.length
         });
 
-        const response = await withTimeout("Fal Kontext generation", (signal) =>
-          fal.subscribe("fal-ai/flux-kontext/dev", {
-            input: {
-              prompt: compiled.prompt,
-              image_url: sourceImageUrl,
-              resolution_mode: "match_input",
-              num_images: 1,
-              num_inference_steps: 28,
-              guidance_scale: 2.5,
-              output_format: "png",
-              enable_safety_checker: true
-            },
-            logs: true,
-            abortSignal: signal
-          })
-        );
+        let response;
+        try {
+          response = await runFalKontextWithRetry(generationFal, compiled, sourceImageUrl);
+        } catch (error) {
+          console.error("[imageProviders:fAL] Fal Kontext subscribe failed after retry.");
+          logFalError(error);
+          throw error;
+        }
+        assertFalImageResponse(response);
 
         console.info("[imageProviders:fAL] Flux Kontext generation complete.", {
           requestId: response.requestId,
           imageCount: response.data.images?.length ?? 0
         });
 
-        return {
+        const result = {
           provider: "fal",
           status: "complete",
           mode: "image-to-image",
@@ -152,13 +245,16 @@ const falProvider: ImageProvider = {
           prompt: compiled.prompt,
           negativePrompt: compiled.negativePrompt,
           caption: compiled.caption,
+          overlayText: compiled.overlayText,
           rawProviderResponse: response,
           meta: {
             model: "fal-ai/flux-kontext/dev",
             requestId: response.requestId,
             sourceImageUrl
           }
-        };
+        } satisfies ImageGenerationResult;
+
+        return applyTextOverlay(result, compiled);
       }
 
       console.info("[imageProviders:fAL] Starting Flux text-to-image generation.", {
@@ -166,28 +262,22 @@ const falProvider: ImageProvider = {
         promptLength: compiled.prompt.length
       });
 
-      const response = await withTimeout("Fal Flux generation", (signal) =>
-        fal.subscribe("fal-ai/flux/dev", {
-          input: {
-            prompt: compiled.prompt,
-            image_size: "portrait_4_3",
-            num_images: 1,
-            num_inference_steps: 28,
-            guidance_scale: 3.5,
-            output_format: "png",
-            enable_safety_checker: true
-          },
-          logs: true,
-          abortSignal: signal
-        })
-      );
+      let response;
+      try {
+        response = await runFalTextWithRetry(generationFal, compiled);
+      } catch (error) {
+        console.error("[imageProviders:fAL] Fal Flux subscribe failed after retry.");
+        logFalError(error);
+        throw error;
+      }
+      assertFalImageResponse(response);
 
       console.info("[imageProviders:fAL] Flux text-to-image generation complete.", {
         requestId: response.requestId,
         imageCount: response.data.images?.length ?? 0
       });
 
-      return {
+      const result = {
         provider: "fal",
         status: "complete",
         mode: requestedMode,
@@ -195,14 +285,18 @@ const falProvider: ImageProvider = {
         prompt: compiled.prompt,
         negativePrompt: compiled.negativePrompt,
         caption: compiled.caption,
+        overlayText: compiled.overlayText,
         rawProviderResponse: response,
         meta: {
           model: "fal-ai/flux/dev",
           requestId: response.requestId
         }
-      };
+      } satisfies ImageGenerationResult;
+
+      return applyTextOverlay(result, compiled);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Fal generation failed.";
+      logFalError(error);
       console.error("[imageProviders:fAL] Fal provider failed.", {
         message,
         mode: requestedMode,
@@ -212,6 +306,71 @@ const falProvider: ImageProvider = {
     }
   }
 };
+
+async function runFalKontext(generationFal: FalClient, compiled: CompiledPrompt, sourceImageUrl: string) {
+  return withTimeout("Fal Kontext generation", (signal) =>
+    generationFal.subscribe("fal-ai/flux-kontext/dev", {
+      input: {
+        prompt: compiled.prompt,
+        image_url: sourceImageUrl,
+        resolution_mode: "match_input",
+        num_images: 1,
+        num_inference_steps: 28,
+        guidance_scale: 2.5,
+        output_format: "png",
+        enable_safety_checker: true
+      },
+      logs: true,
+      abortSignal: signal
+    })
+  );
+}
+
+async function runFalKontextWithRetry(generationFal: FalClient, compiled: CompiledPrompt, sourceImageUrl: string) {
+  try {
+    return await runFalKontext(generationFal, compiled, sourceImageUrl);
+  } catch (error) {
+    logFalError(error);
+    const retry = retryCompiledPrompt(compiled);
+    console.warn("[imageProviders:fAL] Retrying Flux Kontext with shorter prompt.", {
+      originalLength: compiled.prompt.length,
+      retryLength: retry.prompt.length
+    });
+    return runFalKontext(generationFal, retry, sourceImageUrl);
+  }
+}
+
+async function runFalText(generationFal: FalClient, compiled: CompiledPrompt) {
+  return withTimeout("Fal Flux generation", (signal) =>
+    generationFal.subscribe("fal-ai/flux/dev", {
+      input: {
+        prompt: compiled.prompt,
+        image_size: "portrait_4_3",
+        num_images: 1,
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
+        output_format: "png",
+        enable_safety_checker: true
+      },
+      logs: true,
+      abortSignal: signal
+    })
+  );
+}
+
+async function runFalTextWithRetry(generationFal: FalClient, compiled: CompiledPrompt) {
+  try {
+    return await runFalText(generationFal, compiled);
+  } catch (error) {
+    logFalError(error);
+    const retry = retryCompiledPrompt(compiled);
+    console.warn("[imageProviders:fAL] Retrying Flux text-to-image with shorter prompt.", {
+      originalLength: compiled.prompt.length,
+      retryLength: retry.prompt.length
+    });
+    return runFalText(generationFal, retry);
+  }
+}
 
 export function getImageProvider(providerId = "mock"): ImageProvider {
   switch (providerId) {

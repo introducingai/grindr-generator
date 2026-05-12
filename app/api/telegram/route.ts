@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 import { buildGrindrifyPrompt } from "@/generation/grindrifyPrompt";
 import { loadPresets } from "@/generation/moduleLoader";
 
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 const MAX_GENERATIONS_PER_HOUR = 3;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const DEFAULT_MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const TELEGRAM_DOWNLOAD_MAX_BYTES = 20 * 1024 * 1024;
+const TELEGRAM_IMAGE_MAX_SIDE = 1200;
+const TELEGRAM_IMAGE_JPEG_QUALITY = 80;
 const generationBuckets = new Map<number, number[]>();
 
 type TelegramPhotoSize = {
@@ -140,10 +144,46 @@ async function telegramCall<T>(method: string, body: Record<string, unknown>): P
   return payload.result as T;
 }
 
+async function telegramFormCall<T>(method: string, body: FormData): Promise<T> {
+  const response = await fetch(telegramApiUrl(method), {
+    method: "POST",
+    body
+  });
+  const payload = await response.json();
+
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.description || `Telegram ${method} failed.`);
+  }
+
+  return payload.result as T;
+}
+
 async function replyText(message: TelegramMessage, text: string) {
   await telegramCall("sendMessage", {
     chat_id: message.chat.id,
     text,
+    reply_to_message_id: message.message_id
+  });
+}
+
+async function replyPhoto(message: TelegramMessage, imageUrl: string, caption: string) {
+  if (imageUrl.startsWith("data:image/")) {
+    const [header, base64] = imageUrl.split(",", 2);
+    const mime = header.match(/^data:(.*?);base64$/)?.[1] || "image/png";
+    const bytes = Uint8Array.from(Buffer.from(base64, "base64"));
+    const formData = new FormData();
+    formData.append("chat_id", String(message.chat.id));
+    formData.append("reply_to_message_id", String(message.message_id));
+    formData.append("caption", caption);
+    formData.append("photo", new Blob([bytes], { type: mime }), "grindr-output.png");
+    await telegramFormCall("sendPhoto", formData);
+    return;
+  }
+
+  await telegramCall("sendPhoto", {
+    chat_id: message.chat.id,
+    photo: imageUrl,
+    caption,
     reply_to_message_id: message.message_id
   });
 }
@@ -172,7 +212,64 @@ async function downloadTelegramPhoto(fileId: string): Promise<Blob> {
     throw new Error("Failed to download Telegram image.");
   }
 
-  return fileResponse.blob();
+  const blob = await fileResponse.blob();
+  const firstBytes = Buffer.from(await blob.slice(0, 16).arrayBuffer()).toString("hex");
+  console.info("[api/telegram] Telegram photo downloaded.", {
+    size: blob.size,
+    mimeType: blob.type || "unknown",
+    contentType: fileResponse.headers.get("content-type") || "unknown",
+    firstBytes
+  });
+
+  return blob;
+}
+
+async function compressTelegramImage(image: Blob): Promise<Blob> {
+  const input = Buffer.from(await image.arrayBuffer());
+  const firstBytes = input.subarray(0, 16).toString("hex");
+  const imageInfo = await sharp(input).metadata().catch((error) => {
+    console.error("[api/telegram] Sharp could not read Telegram image metadata.", {
+      message: error instanceof Error ? error.message : String(error),
+      inputBytes: input.byteLength,
+      mimeType: image.type || "unknown",
+      firstBytes
+    });
+    return null;
+  });
+
+  if (!image.type.startsWith("image/") && !imageInfo?.format) {
+    throw new Error(`Telegram file is not a valid image. mime=${image.type || "unknown"} firstBytes=${firstBytes}`);
+  }
+
+  console.info("[api/telegram] Compressing Telegram image before Fal upload.", {
+    inputBytes: input.byteLength,
+    mimeType: image.type || "unknown",
+    firstBytes,
+    detectedFormat: imageInfo?.format || "unknown",
+    width: imageInfo?.width || null,
+    height: imageInfo?.height || null,
+    maxSide: TELEGRAM_IMAGE_MAX_SIDE,
+    quality: TELEGRAM_IMAGE_JPEG_QUALITY,
+    outputType: "image/jpeg"
+  });
+
+  const output = await sharp(input)
+    .rotate()
+    .resize({
+      width: TELEGRAM_IMAGE_MAX_SIDE,
+      height: TELEGRAM_IMAGE_MAX_SIDE,
+      fit: "inside",
+      withoutEnlargement: true
+    })
+    .jpeg({ quality: TELEGRAM_IMAGE_JPEG_QUALITY, mozjpeg: true })
+    .toBuffer();
+
+  console.info("[api/telegram] Telegram image compressed.", {
+    inputBytes: input.byteLength,
+    outputBytes: output.byteLength
+  });
+
+  return new Blob([output], { type: "image/jpeg" });
 }
 
 function appOrigin(request: Request) {
@@ -188,19 +285,36 @@ function appOrigin(request: Request) {
   return configured || new URL(request.url).origin;
 }
 
-async function callGenerationApi(request: Request, brief: string, sourceImage?: Blob) {
+type GenerationApiPayload = {
+  ok?: boolean;
+  error?: string;
+  imageUrl: string | null;
+  prompt: string;
+  caption?: string;
+  provider: string;
+  mode: string;
+  status?: string;
+};
+
+async function callGenerationApi(
+  request: Request,
+  brief: string,
+  sourceImage?: Blob,
+  forcedMode?: "text-to-image" | "image-to-image"
+): Promise<GenerationApiPayload> {
+  const mode = forcedMode || (sourceImage ? "image-to-image" : "text-to-image");
   const formData = new FormData();
   formData.append("provider", process.env.GRINDR_IMAGE_PROVIDER || "fal");
-  formData.append("mode", sourceImage ? "image-to-image" : "text-to-image");
+  formData.append("mode", mode);
   formData.append("userBrief", brief || "make this a viral $GRINDR extraction meme");
 
-  if (sourceImage) {
+  if (sourceImage && mode === "image-to-image") {
     formData.append("image", sourceImage, "telegram-source.jpg");
   }
 
   console.info("[api/telegram] Calling generation API.", {
     origin: appOrigin(request),
-    mode: sourceImage ? "image-to-image" : "text-to-image",
+    mode,
     provider: process.env.GRINDR_IMAGE_PROVIDER || "fal",
     imageBytes: sourceImage?.size ?? 0
   });
@@ -214,10 +328,19 @@ async function callGenerationApi(request: Request, brief: string, sourceImage?: 
   }));
 
   if (!response.ok) {
-    throw new Error(payload.error || "Fal failed to generate the image.");
+    return {
+      ok: false,
+      error: payload.error || "Fal failed to generate the image.",
+      imageUrl: payload.imageUrl ?? null,
+      prompt: payload.prompt || "Prompt unavailable.",
+      caption: payload.caption,
+      provider: payload.provider || "fal",
+      mode: payload.mode || mode,
+      status: payload.status || "failed"
+    };
   }
 
-  return payload as { imageUrl: string | null; prompt: string; caption?: string; provider: string; mode: string };
+  return payload as GenerationApiPayload;
 }
 
 async function handleHelpCommand(message: TelegramMessage) {
@@ -287,15 +410,17 @@ async function handleGrindrCommand(request: Request, message: TelegramMessage) {
   const photo = largestPhoto(message) || largestPhoto(message.reply_to_message);
   const maxBytes = maxImageBytes();
 
-  if (photo?.file_size && photo.file_size > maxBytes) {
+  if (photo?.file_size && photo.file_size > TELEGRAM_DOWNLOAD_MAX_BYTES) {
     console.warn("[api/telegram] Telegram photo rejected before download.", {
       chatId: message.chat.id,
       fileSize: photo.file_size,
-      maxBytes
+      maxBytes: TELEGRAM_DOWNLOAD_MAX_BYTES
     });
     await replyText(
       message,
-      `That image is too large for launch mode. Please send something under ${Math.floor(maxBytes / 1024 / 1024)}MB.`
+      `That image is too large to process. Please send something under ${Math.floor(
+        TELEGRAM_DOWNLOAD_MAX_BYTES / 1024 / 1024
+      )}MB.`
     );
     return;
   }
@@ -322,7 +447,8 @@ async function handleGrindrCommand(request: Request, message: TelegramMessage) {
     action: "upload_photo"
   });
 
-  const sourceImage = photo ? await downloadTelegramPhoto(photo.file_id) : undefined;
+  const downloadedImage = photo ? await downloadTelegramPhoto(photo.file_id) : undefined;
+  const sourceImage = downloadedImage ? await compressTelegramImage(downloadedImage) : undefined;
 
   if (sourceImage && sourceImage.size > maxBytes) {
     console.warn("[api/telegram] Telegram photo rejected after download.", {
@@ -337,15 +463,47 @@ async function handleGrindrCommand(request: Request, message: TelegramMessage) {
     return;
   }
 
-  const result = await callGenerationApi(request, brief, sourceImage);
+  let result = await callGenerationApi(request, brief, sourceImage);
+
+  if ((result.error || result.status === "failed") && sourceImage) {
+    console.warn("[api/telegram] Image-to-image failed; retrying text-to-image fallback.", {
+      chatId: message.chat.id,
+      reason: result.error || "status failed"
+    });
+    const textOnlyResult = await callGenerationApi(request, brief, undefined, "text-to-image");
+
+    if (textOnlyResult.imageUrl) {
+      await replyPhoto(
+        message,
+        textOnlyResult.imageUrl,
+        `image reference failed, cooked a text-only version instead\n\n${textOnlyResult.caption || "$GRINDR INDUSTRIES OUTPUT"}`
+      );
+      return;
+    }
+
+    result = {
+      ...textOnlyResult,
+      error: textOnlyResult.error || result.error || "Image reference failed and text-only fallback failed.",
+      prompt: textOnlyResult.prompt || result.prompt
+    };
+  }
+
+  if (result.error || result.status === "failed") {
+    const debugPrompt = envFlag("TELEGRAM_DEBUG") ? ["", "Prompt:", result.prompt].join("\n") : "";
+    await replyText(
+      message,
+      [
+        "Fal failed, but the machine still compiled the directive.",
+        "",
+        `Reason: ${result.error || "Provider returned no generated image."}`,
+        debugPrompt
+      ].join("\n")
+    );
+    return;
+  }
 
   if (result.imageUrl) {
-    await telegramCall("sendPhoto", {
-      chat_id: message.chat.id,
-      photo: result.imageUrl,
-      caption: result.caption || "$GRINDR INDUSTRIES OUTPUT",
-      reply_to_message_id: message.message_id
-    });
+    await replyPhoto(message, result.imageUrl, result.caption || "$GRINDR INDUSTRIES OUTPUT");
     return;
   }
 
@@ -404,7 +562,7 @@ export async function POST(request: Request) {
         const detail = error instanceof Error ? error.message : "Unknown provider error.";
         await replyText(
           message,
-          `Fal choked on that one. Try a shorter brief or a smaller image.\n\nDetail: ${detail}`
+          `Fal choked before a prompt response came back. Try a shorter brief or a smaller image.\n\nDetail: ${detail}`
         );
       }
       return NextResponse.json({ ok: true });

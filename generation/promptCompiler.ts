@@ -47,7 +47,7 @@ export function compileImagePrompt(selection: PromptSelection, modules: PromptMo
     `Action: ${list(modules.theme.actions) || "public conviction creates follower entry while operators quietly extract."}`,
     `Visual motifs: ${symbolText || "smartphones, private chats, chart candles, hidden wallets, glowing notifications."}`,
     `Branding: GRINDR INDUSTRIES, ${token}, cold corporate satire, luxury degeneracy, memecoin extraction culture.`,
-    `Text: headline "${headline}", subtext "ATTENTION HARVESTING DIVISION", tiny corporate footer "GRINDR INDUSTRIES INTERNAL USE ONLY".`,
+    "Typography: leave clean dark poster space for typography overlays. Do not render exact words, slogans, captions, logos, or readable text inside the image.",
     `Camera and composition: ${modules.format.composition || "clear central composition"}, ${modules.camera.description || modules.camera.id}, ${list(modules.camera.effects)}.`,
     `Style: palette ${list(modules.style.palette)}, textures ${list(modules.style.textures)}, mood ${modules.style.mood || "seductive paranoid satire"}, chaos level ${chaosLevel}/10.`,
     selection.userBrief ? `User brief: ${selection.userBrief}` : "",
@@ -64,6 +64,9 @@ export function compileImagePrompt(selection: PromptSelection, modules: PromptMo
     "hate symbols",
     "explicit sexual content",
     "unreadable main text",
+    "AI-generated text",
+    "misspelled typography",
+    "rendered slogans",
     "watermarks",
     "photorealistic depiction of a real brand app interface"
   ].join(", ");
@@ -72,6 +75,11 @@ export function compileImagePrompt(selection: PromptSelection, modules: PromptMo
     prompt,
     negativePrompt,
     caption: `${headline} // ${modules.format.id} // ${modules.theme.id}`,
+    overlayText: {
+      headline,
+      subtext: "ATTENTION HARVESTING DIVISION",
+      footer: "GRINDR INDUSTRIES INTERNAL USE ONLY"
+    },
     selection: { ...selection, chaosLevel },
     modules
   };

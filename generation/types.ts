@@ -71,6 +71,11 @@ export type CompiledPrompt = {
   prompt: string;
   negativePrompt: string;
   caption: string;
+  overlayText: {
+    headline: string;
+    subtext: string;
+    footer: string;
+  };
   selection: PromptSelection;
   modules: PromptModules;
 };
@@ -108,6 +113,11 @@ export type ImageGenerationResult = {
   prompt: string;
   negativePrompt: string;
   caption: string;
+  overlayText?: {
+    headline: string;
+    subtext: string;
+    footer: string;
+  };
   rawProviderResponse: unknown;
   meta: Record<string, unknown>;
 };

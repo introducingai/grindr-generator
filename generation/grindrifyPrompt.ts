@@ -88,7 +88,7 @@ export async function buildGrindrifyPrompt({
     `Archetype to embody: ${archetype.id}, ${archetype.role}, ${archetype.corporate_title}. Traits: ${(archetype.traits || []).join(", ")}. Visual tells: ${(archetype.visuals || []).join(", ")}.`,
     `Theme: ${modules.theme.summary}. Actions: ${(modules.theme.actions || []).join(", ")}.`,
     `Symbols: ${modules.symbols.map((symbol) => symbol.description || symbol.id).join(", ")}.`,
-    `Slogan/text: headline "${selection.slogan}", subtext "ATTENTION HARVESTING DIVISION", footer "GRINDR INDUSTRIES INTERNAL LEAK".`,
+    "Typography: leave clean dark poster space for typography overlays. Do not render exact words, slogans, captions, logos, or readable text inside the image.",
     `Style: ${(modules.style.palette || []).join(", ")} palette, ${(modules.style.textures || []).join(", ")} textures, ${modules.style.mood || "internet-poisoned luxury paranoia"}.`,
     `Camera: ${modules.camera.description || modules.camera.id}, ${(modules.camera.effects || []).join(", ")}.`,
     `Chaos level: ${selection.chaosLevel}/10.`,
@@ -99,8 +99,15 @@ export async function buildGrindrifyPrompt({
 
   return {
     prompt,
-    negativePrompt: recipe.negative_prompt.join(", "),
+    negativePrompt: [...recipe.negative_prompt, "AI-generated text", "misspelled typography", "rendered slogans"].join(
+      ", "
+    ),
     caption: `${selection.slogan} // ${recipe.id}`,
+    overlayText: {
+      headline: selection.slogan || "WE EXTRACT",
+      subtext: "ATTENTION HARVESTING DIVISION",
+      footer: "GRINDR INDUSTRIES INTERNAL LEAK"
+    },
     selection,
     modules
   };
