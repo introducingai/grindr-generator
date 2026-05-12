@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { buildGrindrifyPrompt } from "@/generation/grindrifyPrompt";
 import { loadPresets } from "@/generation/moduleLoader";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_GENERATIONS_PER_HOUR = 3;
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const generationBuckets = new Map<number, number[]>();
 
 type TelegramPhotoSize = {
@@ -58,9 +59,22 @@ function adminIds() {
   );
 }
 
+function adminUsernames() {
+  return new Set(
+    (process.env.TELEGRAM_ADMIN_IDS || "")
+      .split(",")
+      .map((id) => id.trim().replace(/^@/, "").toLowerCase())
+      .filter((id) => id && Number.isNaN(Number(id)))
+  );
+}
+
 function isAdmin(message: TelegramMessage) {
   const userId = message.from?.id;
-  return typeof userId === "number" && adminIds().has(userId);
+  const username = message.from?.username?.toLowerCase();
+  return (
+    (typeof userId === "number" && adminIds().has(userId)) ||
+    (typeof username === "string" && adminUsernames().has(username))
+  );
 }
 
 function isPublicBot() {
@@ -70,6 +84,15 @@ function isPublicBot() {
 function maxImageBytes() {
   const parsed = Number(process.env.TELEGRAM_MAX_IMAGE_BYTES);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_IMAGE_BYTES;
+}
+
+function isTelegramMessage(value: unknown): value is TelegramMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeMessage = value as Partial<TelegramMessage>;
+  return typeof maybeMessage.message_id === "number" && typeof maybeMessage.chat?.id === "number";
 }
 
 function checkGenerationAccess(message: TelegramMessage) {
@@ -99,6 +122,10 @@ function checkRateLimit(message: TelegramMessage) {
 }
 
 async function telegramCall<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.warn("[api/telegram] Missing TELEGRAM_BOT_TOKEN while attempting Telegram call.", { method });
+  }
+
   const response = await fetch(telegramApiUrl(method), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -136,6 +163,7 @@ function largestPhoto(message?: TelegramMessage) {
 }
 
 async function downloadTelegramPhoto(fileId: string): Promise<Blob> {
+  console.info("[api/telegram] Downloading Telegram photo.", { fileId });
   const file = await telegramCall<{ file_path: string }>("getFile", { file_id: fileId });
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const fileResponse = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`);
@@ -148,7 +176,16 @@ async function downloadTelegramPhoto(fileId: string): Promise<Blob> {
 }
 
 function appOrigin(request: Request) {
-  return process.env.APP_BASE_URL || new URL(request.url).origin;
+  const configured = process.env.APP_BASE_URL;
+  if (configured && !configured.includes("localhost") && !configured.includes("127.0.0.1")) {
+    return configured;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return configured || new URL(request.url).origin;
 }
 
 async function callGenerationApi(request: Request, brief: string, sourceImage?: Blob) {
@@ -161,11 +198,20 @@ async function callGenerationApi(request: Request, brief: string, sourceImage?: 
     formData.append("image", sourceImage, "telegram-source.jpg");
   }
 
+  console.info("[api/telegram] Calling generation API.", {
+    origin: appOrigin(request),
+    mode: sourceImage ? "image-to-image" : "text-to-image",
+    provider: process.env.GRINDR_IMAGE_PROVIDER || "fal",
+    imageBytes: sourceImage?.size ?? 0
+  });
+
   const response = await fetch(`${appOrigin(request)}/api/generate-image`, {
     method: "POST",
     body: formData
   });
-  const payload = await response.json();
+  const payload = await response.json().catch(() => ({
+    error: "Generation API returned a non-JSON response."
+  }));
 
   if (!response.ok) {
     throw new Error(payload.error || "Fal failed to generate the image.");
@@ -225,6 +271,13 @@ async function handleLogOnlyCommand(message: TelegramMessage, brief: string, has
 }
 
 async function handleGrindrCommand(request: Request, message: TelegramMessage) {
+  console.info("[api/telegram] Handling /grindr command.", {
+    chatId: message.chat.id,
+    userId: message.from?.id ?? null,
+    public: isPublicBot(),
+    logOnly: envFlag("TELEGRAM_LOG_ONLY")
+  });
+
   if (!checkGenerationAccess(message)) {
     await replyText(message, "This bot is currently private. Ask an admin to add your Telegram user ID.");
     return;
@@ -235,6 +288,11 @@ async function handleGrindrCommand(request: Request, message: TelegramMessage) {
   const maxBytes = maxImageBytes();
 
   if (photo?.file_size && photo.file_size > maxBytes) {
+    console.warn("[api/telegram] Telegram photo rejected before download.", {
+      chatId: message.chat.id,
+      fileSize: photo.file_size,
+      maxBytes
+    });
     await replyText(
       message,
       `That image is too large for launch mode. Please send something under ${Math.floor(maxBytes / 1024 / 1024)}MB.`
@@ -267,6 +325,11 @@ async function handleGrindrCommand(request: Request, message: TelegramMessage) {
   const sourceImage = photo ? await downloadTelegramPhoto(photo.file_id) : undefined;
 
   if (sourceImage && sourceImage.size > maxBytes) {
+    console.warn("[api/telegram] Telegram photo rejected after download.", {
+      chatId: message.chat.id,
+      imageBytes: sourceImage.size,
+      maxBytes
+    });
     await replyText(
       message,
       `That image is too large for launch mode. Please send something under ${Math.floor(maxBytes / 1024 / 1024)}MB.`
@@ -306,11 +369,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const update = (await request.json()) as TelegramUpdate;
-    const message = update.message;
+    const update = (await request.json().catch((error) => {
+      const message = error instanceof Error ? error.message : "Invalid JSON.";
+      console.warn("[api/telegram] Ignoring malformed JSON update.", { message });
+      return null;
+    })) as TelegramUpdate | null;
+
+    if (!update || typeof update !== "object") {
+      return NextResponse.json({ ok: true, ignored: true, reason: "malformed_update" });
+    }
+
+    const message = isTelegramMessage(update.message) ? update.message : undefined;
     const text = message ? commandText(message) : "";
 
     if (!message) {
+      console.info("[api/telegram] Ignoring unsupported or malformed Telegram update.");
       return NextResponse.json({ ok: true, ignored: true });
     }
 
@@ -340,6 +413,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Telegram bot error.";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    console.error("[api/telegram] Webhook handling failed without crashing.", { message });
+    return NextResponse.json({ ok: false, error: message }, { status: 200 });
   }
 }

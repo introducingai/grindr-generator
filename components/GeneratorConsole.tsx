@@ -9,6 +9,8 @@ type Props = {
   initialSelection: PromptSelection;
 };
 
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
 function moduleLabel(id: string) {
   return id
     .split("_")
@@ -219,6 +221,22 @@ export function GeneratorConsole({ initialManifest, initialSelection }: Props) {
                   type="file"
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
+                    setError(null);
+
+                    if (file && file.size > MAX_UPLOAD_BYTES) {
+                      setSourceImage(null);
+                      event.target.value = "";
+                      setError("Uploaded image is too large. Max size is 4MB.");
+                      return;
+                    }
+
+                    if (file && !file.type.startsWith("image/")) {
+                      setSourceImage(null);
+                      event.target.value = "";
+                      setError("Uploaded file must be an image.");
+                      return;
+                    }
+
                     setSourceImage(file);
                     if (file) {
                       setMode("image-to-image");

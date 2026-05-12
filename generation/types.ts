@@ -102,7 +102,7 @@ export type PresetModule = JsonModule & {
 
 export type ImageGenerationResult = {
   provider: "mock" | "fal";
-  status: "mock" | "queued" | "complete";
+  status: "mock" | "queued" | "complete" | "failed";
   mode: "text-to-image" | "image-to-image";
   imageUrl: string | null;
   prompt: string;
